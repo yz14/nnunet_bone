@@ -1,0 +1,251 @@
+# Total Segmentator v1 Label Definitions
+# Reference: Wasserthal et al., "TotalSegmentator: Robust Segmentation of 104
+#            Anatomical Structures in CT Images", Radiology: AI, 2023
+#
+# This file defines:
+#   1. all_labels  — complete label map (104 classes, values 1~104)
+#   2. bone_groups — grouped bone structures with their source label IDs
+#   3. active_groups — which groups to use in segmentation task
+#
+# NOTE: If using Total Segmentator v2 (117 classes), some label IDs may differ.
+#       Run `python scripts/inspect_labels.py` first to verify actual label values.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Complete Total Segmentator v1 label map (for reference / inspection)
+# ─────────────────────────────────────────────────────────────────────────────
+all_labels:
+  1:   spleen
+  2:   kidney_right
+  3:   kidney_left
+  4:   gallbladder
+  5:   liver
+  6:   stomach
+  7:   aorta
+  8:   inferior_vena_cava
+  9:   portal_vein_and_splenic_vein
+  10:  pancreas
+  11:  adrenal_gland_right
+  12:  adrenal_gland_left
+  13:  lung_upper_lobe_left
+  14:  lung_lower_lobe_left
+  15:  lung_upper_lobe_right
+  16:  lung_middle_lobe_right
+  17:  lung_lower_lobe_right
+  # ---- vertebrae (24 classes) ----
+  18:  vertebrae_L5
+  19:  vertebrae_L4
+  20:  vertebrae_L3
+  21:  vertebrae_L2
+  22:  vertebrae_L1
+  23:  vertebrae_T12
+  24:  vertebrae_T11
+  25:  vertebrae_T10
+  26:  vertebrae_T9
+  27:  vertebrae_T8
+  28:  vertebrae_T7
+  29:  vertebrae_T6
+  30:  vertebrae_T5
+  31:  vertebrae_T4
+  32:  vertebrae_T3
+  33:  vertebrae_T2
+  34:  vertebrae_T1
+  35:  vertebrae_C7
+  36:  vertebrae_C6
+  37:  vertebrae_C5
+  38:  vertebrae_C4
+  39:  vertebrae_C3
+  40:  vertebrae_C2
+  41:  vertebrae_C1
+  # ---- other structures ----
+  42:  esophagus
+  43:  trachea
+  44:  heart_myocardium
+  45:  heart_atrium_left
+  46:  heart_ventricle_left
+  47:  heart_atrium_right
+  48:  heart_ventricle_right
+  49:  pulmonary_artery
+  50:  brain
+  51:  iliac_artery_left
+  52:  iliac_artery_right
+  53:  iliac_vena_left
+  54:  iliac_vena_right
+  55:  small_bowel
+  56:  duodenum
+  57:  colon
+  # ---- ribs (24 classes) ----
+  58:  rib_left_1
+  59:  rib_left_2
+  60:  rib_left_3
+  61:  rib_left_4
+  62:  rib_left_5
+  63:  rib_left_6
+  64:  rib_left_7
+  65:  rib_left_8
+  66:  rib_left_9
+  67:  rib_left_10
+  68:  rib_left_11
+  69:  rib_left_12
+  70:  rib_right_1
+  71:  rib_right_2
+  72:  rib_right_3
+  73:  rib_right_4
+  74:  rib_right_5
+  75:  rib_right_6
+  76:  rib_right_7
+  77:  rib_right_8
+  78:  rib_right_9
+  79:  rib_right_10
+  80:  rib_right_11
+  81:  rib_right_12
+  # ---- shoulder girdle (6 classes) ----
+  82:  humerus_left
+  83:  humerus_right
+  84:  scapula_left
+  85:  scapula_right
+  86:  clavicula_left
+  87:  clavicula_right
+  # ---- lower extremity (4 classes) ----
+  88:  femur_left
+  89:  femur_right
+  90:  hip_left
+  91:  hip_right
+  # ---- pelvis / axial skeleton ----
+  92:  sacrum
+  93:  face
+  # ---- muscles (10 classes) ----
+  94:  gluteus_maximus_left
+  95:  gluteus_maximus_right
+  96:  gluteus_medius_left
+  97:  gluteus_medius_right
+  98:  gluteus_minimus_left
+  99:  gluteus_minimus_right
+  100: autochthon_left
+  101: autochthon_right
+  102: iliopsoas_left
+  103: iliopsoas_right
+  # ---- sternum ----
+  104: sternum
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bone structure groups
+#   labels: list of source label IDs from Total Segmentator
+#   names:  human-readable names (for documentation)
+# ─────────────────────────────────────────────────────────────────────────────
+bone_groups:
+  vertebrae:
+    labels: [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
+    names:
+      - vertebrae_L5
+      - vertebrae_L4
+      - vertebrae_L3
+      - vertebrae_L2
+      - vertebrae_L1
+      - vertebrae_T12
+      - vertebrae_T11
+      - vertebrae_T10
+      - vertebrae_T9
+      - vertebrae_T8
+      - vertebrae_T7
+      - vertebrae_T6
+      - vertebrae_T5
+      - vertebrae_T4
+      - vertebrae_T3
+      - vertebrae_T2
+      - vertebrae_T1
+      - vertebrae_C7
+      - vertebrae_C6
+      - vertebrae_C5
+      - vertebrae_C4
+      - vertebrae_C3
+      - vertebrae_C2
+      - vertebrae_C1
+
+  ribs:
+    labels: [58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69,
+             70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]
+    names:
+      - rib_left_1
+      - rib_left_2
+      - rib_left_3
+      - rib_left_4
+      - rib_left_5
+      - rib_left_6
+      - rib_left_7
+      - rib_left_8
+      - rib_left_9
+      - rib_left_10
+      - rib_left_11
+      - rib_left_12
+      - rib_right_1
+      - rib_right_2
+      - rib_right_3
+      - rib_right_4
+      - rib_right_5
+      - rib_right_6
+      - rib_right_7
+      - rib_right_8
+      - rib_right_9
+      - rib_right_10
+      - rib_right_11
+      - rib_right_12
+
+  sternum:
+    labels: [104]
+    names:
+      - sternum
+
+  pelvis:
+    labels: [90, 91, 92]
+    names:
+      - hip_left
+      - hip_right
+      - sacrum
+
+  shoulder_girdle:
+    labels: [82, 83, 84, 85, 86, 87]
+    names:
+      - humerus_left
+      - humerus_right
+      - scapula_left
+      - scapula_right
+      - clavicula_left
+      - clavicula_right
+
+  femur:
+    labels: [88, 89]
+    names:
+      - femur_left
+      - femur_right
+
+  # skull/face — included optionally, often excluded in body bone models
+  skull:
+    labels: [93]
+    names:
+      - face
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Active groups — which groups participate in segmentation
+# Comment out any group to exclude it from training
+# ─────────────────────────────────────────────────────────────────────────────
+active_groups:
+  - vertebrae
+  - ribs
+  - sternum
+  - pelvis
+  - shoulder_girdle
+  - femur
+  # - skull   # uncomment to include skull/face region
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Multi-class label mapping (used only when segmentation.mode = "multiclass")
+# Maps group name → output class ID (must start from 1; 0 = background)
+# ─────────────────────────────────────────────────────────────────────────────
+multiclass_mapping:
+  vertebrae:      1
+  ribs:           2
+  sternum:        3
+  pelvis:         4
+  shoulder_girdle: 5
+  femur:          6
+  skull:          7

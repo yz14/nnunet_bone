@@ -1,0 +1,215 @@
+# BoneSeg — nnUNet Training Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# All important parameters are here. Adjust before each experiment run.
+# Usage:
+#   python scripts/01_prepare_data.py --config configs/default.yaml
+#   python scripts/02_train.py        --config configs/default.yaml
+#   python scripts/03_predict.py      --config configs/default.yaml
+#   python scripts/04_evaluate.py     --config configs/default.yaml
+#
+# For 2.5-D mode:
+#   python scripts/01b_prepare_data_25d.py --config configs/default.yaml
+#   python scripts/02_train_25d.py          --config configs/default.yaml
+#   python scripts/03_predict_25d.py        --config configs/default.yaml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+  # Directory containing raw Total Segmentator data (s0000.nii.gz, s0000-seg.nii.gz, ...)
+  raw_data_dir: "D:/codes/work-projects/nnunet_bone/data"
+
+  # nnUNet workspace — sub-dirs (raw / preprocessed / results) will be created here
+  nnunet_workspace: "D:/codes/work-projects/nnunet_bone/nnunet_workspace"
+
+  # Label config file
+  labels_config: "D:/codes/work-projects/nnunet_bone/configs/labels.yaml"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset
+# ─────────────────────────────────────────────────────────────────────────────
+dataset:
+  # nnUNet dataset ID (integer 1~999). Dataset dir will be named Dataset{ID:03d}_{name}
+  id: 100
+  name: "BoneSegmentation"
+
+  # Fraction of data used for training (rest goes to validation / test)
+  # With the default 5-fold CV in nnUNet, this is used only for an
+  # optional hold-out test split before handing data to nnUNet.
+  # Set to 1.0 to let nnUNet manage all splits via cross-validation.
+  train_fraction: 1.0
+
+  # Random seed for train/val split reproducibility
+  split_seed: 42
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Segmentation task
+# ─────────────────────────────────────────────────────────────────────────────
+segmentation:
+  # "binary"     — all active bone groups → single class (label=1)
+  # "multiclass" — each bone group gets its own class ID (see labels.yaml multiclass_mapping)
+  mode: "binary"
+
+  # Only used when mode = "multiclass": override class assignments here,
+  # or leave empty to use multiclass_mapping from labels.yaml
+  # class_override: {}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# nnUNet Preprocessing
+# ─────────────────────────────────────────────────────────────────────────────
+preprocessing:
+  # Verify dataset integrity during plan_and_preprocess
+  verify_dataset_integrity: true
+
+  # Number of processes for preprocessing (-np and -np_ovr flags)
+  # Lower if RAM is limited (e.g., 2 or 4)
+  num_processes: 4
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training
+# ─────────────────────────────────────────────────────────────────────────────
+training:
+  # nnUNet configuration:
+  #   "2d"                  — 2D U-Net (fast, lower performance)
+  #   "3d_lowres"           — 3D U-Net on low-res patches (less GPU memory)
+  #   "3d_fullres"          — 3D U-Net on full-res patches (recommended)
+  #   "3d_cascade_fullres"  — cascade: 3d_lowres → 3d_fullres (best quality, slow)
+  configuration: "3d_fullres"
+
+  # Cross-validation fold to train: 0, 1, 2, 3, 4
+  # Use "all" to train all 5 folds sequentially
+  fold: 0
+
+  # nnUNet trainer class name. Options:
+  #   "nnUNetTrainer"        — default (1000 epochs)
+  #   "nnUNetTrainer_250epochs"
+  #   "nnUNetTrainer_500epochs"
+  # Custom trainer can be placed in nnunet_workspace and referenced here
+  trainer: "nnUNetTrainer"
+
+  # Maximum number of training epochs (overrides trainer default if supported)
+  # Set to null to use trainer's built-in default
+  max_epochs: null
+
+  # Continue training from a checkpoint (null = start fresh)
+  # resume_checkpoint: null
+
+  # Number of GPUs to use (nnUNet handles multi-GPU via torch.distributed)
+  num_gpus: 1
+
+  # Number of data augmentation worker processes (controls nnUNet_n_proc_DA env var).
+  # Default on DKFZ cluster is 12; on Windows lower values prevent pagefile errors.
+  # Set to 0 to use SingleThreadedAugmenter (no child processes, safest on Windows).
+  # Set to 2 for a balance between speed and memory use on Windows.
+  num_proc_da: 2
+
+  # Mixed precision training — nnUNet v2 enables AMP by default in nnUNetTrainer.
+  # To disable, use a custom trainer with `use_torch_amp = False`.
+  # This flag is retained for reference; set to false as a reminder if needed.
+  use_amp: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Inference
+# ─────────────────────────────────────────────────────────────────────────────
+inference:
+  # Which checkpoint to use for prediction
+  # "checkpoint_best.pth"   — best validation checkpoint
+  # "checkpoint_final.pth"  — final epoch checkpoint
+  checkpoint: "checkpoint_best.pth"
+
+  # Fold(s) to use for ensemble prediction
+  # Single fold: 0   |  All folds (ensemble): "all"
+  fold: 0
+
+  # Sliding window overlap step size (0 < step_size <= 1)
+  # Smaller = higher quality but slower. 0.5 is a good default.
+  step_size: 0.5
+
+  # Whether to save softmax probability maps alongside hard predictions
+  save_probabilities: false
+
+  # Apply test-time augmentation (mirror augmentation, ~8× slower but better)
+  disable_tta: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evaluation
+# ─────────────────────────────────────────────────────────────────────────────
+evaluation:
+  # Metrics to compute (Dice and HD95 are standard for medical segmentation)
+  metrics:
+    - dice
+    - hausdorff95
+
+  # Save per-case metric CSV
+  save_csv: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2.5-D Segmentation (optional)
+# ─────────────────────────────────────────────────────────────────────────────
+# The 2.5-D mode stacks adjacent axial slices as separate input channels,
+# giving a 2-D U-Net access to 3-D anatomical context.
+# To enable: run scripts/01b_prepare_data_25d.py then scripts/02_train_25d.py
+#
+# Channel layout (num_channels=5, channel_depth=3):
+#   Channel 0: CT slices [k-2-1 .. k-2+1]   — 1 slice below context
+#   Channel 1: CT slices [k-1-1 .. k-1+1]   — immediately below
+#   Channel 2: CT slice  [k-1 .. k+1]       — centre slice
+#   Channel 3: CT slices [k+1-1 .. k+1+1]   — immediately above
+#   Channel 4: CT slices [k+2-1 .. k+2+1]   — 1 slice above context
+# where k is the target slice index.
+
+segmentation_25d:
+  # Segmentation mode (mirrors the standard segmentation section):
+  #   "binary"     — all active bone groups → single class (label=1)
+  #   "multiclass" — each bone group gets its own class ID
+  mode: "binary"
+
+  # Number of adjacent-slice channels (must be odd, e.g. 3 or 5).
+  #   3 channels: k-1, k, k+1 — minimal 3-D context
+  #   5 channels: k-2 .. k+2  — broader 3-D context (recommended)
+  #   7 channels: k-3 .. k+3  — very wide context (more GPU memory)
+  num_channels: 5
+
+  # Number of slices per channel sub-volume (must be odd, e.g. 1 or 3).
+  #   1: single 2-D slice per channel — lowest memory, fastest training
+  #   3: 3-slice sub-volume per channel — each channel has light depth context
+  #   5: 5-slice sub-volume per channel — richest depth context (higher memory)
+  # Recommendation: (num_channels=5, channel_depth=1) for best quality/speed balance.
+  channel_depth: 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training — 2.5-D specific
+# ─────────────────────────────────────────────────────────────────────────────
+training_25d:
+  # nnUNet configuration: MUST be "2d" for 2.5-D mode
+  # (2-D U-Net operating on multi-channel 2-D inputs)
+  configuration: "2d"
+
+  # Cross-validation fold to train: 0, 1, 2, 3, 4
+  fold: 0
+
+  # nnUNet trainer class name
+  trainer: "nnUNetTrainer"
+
+  # Number of GPUs
+  num_gpus: 1
+
+  # Data augmentation workers (Windows: lower is safer)
+  num_proc_da: 4
+
+  # Mixed precision
+  use_amp: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Inference — 2.5-D specific
+# ─────────────────────────────────────────────────────────────────────────────
+inference_25d:
+  checkpoint: "checkpoint_best.pth"
+
+  # Fold(s): single number or "all" for ensemble
+  fold: 0
+
+  step_size: 0.5
+  save_probabilities: false
+  disable_tta: false
+
