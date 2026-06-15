@@ -127,6 +127,7 @@ def main() -> None:
 
     # ── Prepare dataset ───────────────────────────────────────────────────
     dataset_dir = prepare_nnunet_dataset(cfg, label_cfg, dry_run=args.dry_run)
+    # dataset_dir = '/data0/yzhen/projects/BoneSeg/nnunet_workspace/nnUNet_raw/Dataset100_BoneSegmentation'
 
     if args.dry_run:
         logger.info("[DRY RUN] No files were written. Remove --dry_run to proceed.")

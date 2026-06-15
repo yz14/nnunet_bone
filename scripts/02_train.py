@@ -112,26 +112,16 @@ def run_training(cfg: dict, fold: int, continue_training: bool = False) -> None:
     trainer       = cfg["training"].get("trainer", "nnUNetTrainer")
     num_gpus      = int(cfg["training"].get("num_gpus", 1))
     use_amp       = cfg["training"].get("use_amp", True)
-    max_epochs    = cfg["training"].get("max_epochs")  # None means trainer default
     num_proc_da   = cfg["training"].get("num_proc_da", 12)
+    # ↓ 新增
+    pretrained_weights = cfg["training"].get("pretrained_weights", None)
 
-    # Set number of data augmentation worker processes.
-    # The child process inherits os.environ, so this takes effect in nnUNetv2_train.
-    # Value 0 → SingleThreadedAugmenter (safest on Windows, avoids pagefile errors).
-    # Value 2 → 2 workers (good balance for Windows).
-    # Value 12 → default DKFZ cluster setting.
     _os.environ["nnUNet_n_proc_DA"] = str(int(num_proc_da))
-    logger.info("nnUNet_n_proc_DA = %d  (data augmentation workers)", int(num_proc_da))
+    logger.info("nnUNet_n_proc_DA = %d", int(num_proc_da))
 
-    # Disable torch.compile on Windows — Triton is Linux-only and required by
-    # the inductor backend.  Without this, training crashes with:
-    #   RuntimeError: Cannot find a working triton installation
     if _os.name == "nt":
         _os.environ["nnUNet_compile"] = "false"
-        logger.info("nnUNet_compile = false  (Triton unavailable on Windows)")
 
-    # nnUNet v2 handles multi-GPU via mp.spawn internally; just pass -num_gpus N.
-    # No torchrun needed.
     cmd = [
         "nnUNetv2_train",
         str(dataset_id),
@@ -141,13 +131,16 @@ def run_training(cfg: dict, fold: int, continue_training: bool = False) -> None:
         "-num_gpus", str(num_gpus),
     ]
 
+    # ↓ 新增：只要 config 里填了路径就透传给 nnUNet
+    if pretrained_weights:
+        cmd += ["-pretrained_weights", pretrained_weights]
+        logger.info("Pretrained weights: %s", pretrained_weights)
+
     if continue_training:
         cmd.append("--c")
 
-    # If use_amp is False in config, nnUNet uses FP32. Users who want explicit control
-    # should create a custom trainer subclass with `use_torch_amp = False`.
     logger.info(
-        "Training fold %d  |  config: %s  |  dataset: %d  |  trainer: %s  |  AMP: %s",
+        "Training fold %d | config: %s | dataset: %d | trainer: %s | AMP: %s",
         fold, configuration, dataset_id, trainer, "ON" if use_amp else "OFF",
     )
     logger.info("Command: %s", " ".join(cmd))

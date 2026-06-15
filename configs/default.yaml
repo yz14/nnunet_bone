@@ -3,7 +3,7 @@
 # All important parameters are here. Adjust before each experiment run.
 # Usage:
 #   python scripts/01_prepare_data.py --config configs/default.yaml
-#   python scripts/02_train.py        --config configs/default.yaml
+#   CUDA_VISIBLE_DEVICES=2 python scripts/02_train.py        --config configs/default.yaml
 #   python scripts/03_predict.py      --config configs/default.yaml
 #   python scripts/04_evaluate.py     --config configs/default.yaml
 #
@@ -17,20 +17,20 @@
 # ─────────────────────────────────────────────────────────────────────────────
 paths:
   # Directory containing raw Total Segmentator data (s0000.nii.gz, s0000-seg.nii.gz, ...)
-  raw_data_dir: "D:/codes/work-projects/nnunet_bone/data"
+  raw_data_dir: "/data0/yzhen/data/bone_data_train"
 
   # nnUNet workspace — sub-dirs (raw / preprocessed / results) will be created here
-  nnunet_workspace: "D:/codes/work-projects/nnunet_bone/nnunet_workspace"
+  nnunet_workspace: "/data0/yzhen/projects/BoneSeg/nnunet_workspace"
 
   # Label config file
-  labels_config: "D:/codes/work-projects/nnunet_bone/configs/labels.yaml"
+  labels_config: "/data0/yzhen/projects/BoneSeg/configs/labels.yaml"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Dataset
 # ─────────────────────────────────────────────────────────────────────────────
 dataset:
   # nnUNet dataset ID (integer 1~999). Dataset dir will be named Dataset{ID:03d}_{name}
-  id: 100
+  id: 103
   name: "BoneSegmentation"
 
   # Fraction of data used for training (rest goes to validation / test)
@@ -63,7 +63,7 @@ preprocessing:
 
   # Number of processes for preprocessing (-np and -np_ovr flags)
   # Lower if RAM is limited (e.g., 2 or 4)
-  num_processes: 4
+  num_processes: 24
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Training
@@ -89,7 +89,7 @@ training:
 
   # Maximum number of training epochs (overrides trainer default if supported)
   # Set to null to use trainer's built-in default
-  max_epochs: null
+  max_epochs: 200
 
   # Continue training from a checkpoint (null = start fresh)
   # resume_checkpoint: null
@@ -107,6 +107,9 @@ training:
   # To disable, use a custom trainer with `use_torch_amp = False`.
   # This flag is retained for reference; set to false as a reminder if needed.
   use_amp: true
+
+  # # ← 新增：指向旧模型的权重文件（null = 从头训练）
+  # pretrained_weights: "/data0/yzhen/projects/BoneSeg/nnunet_workspace/nnUNet_results/Dataset100_BoneSegmentation/nnUNetTrainer__nnUNetPlans__3d_fullres/fold_0/checkpoint_best.pth"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Inference

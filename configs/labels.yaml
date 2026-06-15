@@ -133,6 +133,13 @@ all_labels:
 #   names:  human-readable names (for documentation)
 # ─────────────────────────────────────────────────────────────────────────────
 bone_groups:
+  anno1:
+    labels: [1,2,3,4]
+    names:
+      - spleen
+      - kidney_right
+      - kidney_left
+      - gallbladder
   vertebrae:
     labels: [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
     names:
@@ -229,6 +236,7 @@ bone_groups:
 # Comment out any group to exclude it from training
 # ─────────────────────────────────────────────────────────────────────────────
 active_groups:
+  - anno1
   - vertebrae
   - ribs
   - sternum

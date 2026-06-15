@@ -11,8 +11,7 @@ Usage:
     python scripts/03_predict.py --input /path/to/images --output /path/to/preds
 
     # Using config defaults (reads input/output from config paths):
-    python scripts/03_predict.py --config configs/default.yaml \\
-        --input /path/to/input_images --output /path/to/output_preds
+    python scripts/03_predict.py --config configs/default.yaml --input /path/to/input_images --output /path/to/output_preds
 
     # Use a specific fold:
     python scripts/03_predict.py --config configs/default.yaml \\
@@ -23,8 +22,7 @@ Usage:
         --input /path/to/images --output /path/to/preds --fold all
 
     # Predict on raw TotalSeg images (auto-rename with _0000 suffix):
-    python scripts/03_predict.py --config configs/default.yaml \\
-        --input_raw /path/to/totalseg_data --output /path/to/preds
+    CUDA_VISIBLE_DEVICES=1 python scripts/03_predict.py --config configs/default.yaml --input_raw /path/to/totalseg_data --output /path/to/preds
 """
 
 import argparse
