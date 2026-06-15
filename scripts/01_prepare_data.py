@@ -26,8 +26,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.data_prep import prepare_nnunet_dataset
+from src.data_prep_2d import prepare_2d_dataset
 from src.label_config import LabelConfig
-from src.utils import load_config, set_nnunet_env, setup_logging
+from src.utils import get_data_type, load_config, set_nnunet_env, setup_logging
 
 
 def parse_args() -> argparse.Namespace:
@@ -122,12 +123,18 @@ def main() -> None:
     if not args.dry_run:
         set_nnunet_env(cfg)
 
-    # ── Load label configuration ──────────────────────────────────────────
-    label_cfg = LabelConfig(cfg["paths"]["labels_config"])
+    # ── Prepare dataset (branch on data modality) ──────────────────────────
+    data_type = get_data_type(cfg)
+    logger.info("Data type: %s", data_type)
 
-    # ── Prepare dataset ───────────────────────────────────────────────────
-    dataset_dir = prepare_nnunet_dataset(cfg, label_cfg, dry_run=args.dry_run)
-    # dataset_dir = '/data0/yzhen/projects/BoneSeg/nnunet_workspace/nnUNet_raw/Dataset100_BoneSegmentation'
+    if data_type == "2d":
+        # 2-D images (ultrasound / endoscopy): masks are already foreground/
+        # background, so no Total Segmentator label remapping is needed.
+        dataset_dir = prepare_2d_dataset(cfg, dry_run=args.dry_run)
+    else:
+        # 3-D CT: remap Total Segmentator labels via labels.yaml.
+        label_cfg = LabelConfig(cfg["paths"]["labels_config"])
+        dataset_dir = prepare_nnunet_dataset(cfg, label_cfg, dry_run=args.dry_run)
 
     if args.dry_run:
         logger.info("[DRY RUN] No files were written. Remove --dry_run to proceed.")

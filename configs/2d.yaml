@@ -1,0 +1,113 @@
+# BoneSeg — nnUNet 2-D Configuration (ultrasound / endoscopy)
+# ─────────────────────────────────────────────────────────────────────────────
+# Dedicated config for 2-D natural-image segmentation (e.g. ultrasound).
+# The pipeline switches to the 2-D code paths because of `data_type: "2d"`.
+#
+# Usage:
+#   python scripts/01_prepare_data.py --config configs/2d.yaml
+#   CUDA_VISIBLE_DEVICES=0 python scripts/02_train.py --config configs/2d.yaml
+#   python scripts/03_predict.py  --config configs/2d.yaml --input_raw <dir> --output <dir>
+#   python scripts/04_evaluate.py --config configs/2d.yaml --pred_dir <dir> --gt_dir <dir>
+
+# Selects the 2-D pipeline (data_prep_2d, PNG IO, 2d nnUNet configuration).
+# Omit this key (or set "3d") to keep the original 3-D CT behaviour.
+data_type: "2d"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Paths
+# ─────────────────────────────────────────────────────────────────────────────
+paths:
+  # Root of the nested image tree: {patient}/{study}/{group}/<file>.jpg
+  images_dir: "/data0/train/images"
+
+  # Root of the nested mask tree (mirrors images_dir with identical rel paths)
+  masks_dir: "/data0/train/mask"
+
+  # nnUNet workspace — sub-dirs (raw / preprocessed / results) created here
+  nnunet_workspace: "/data0/train/nnunet_workspace"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dataset
+# ─────────────────────────────────────────────────────────────────────────────
+dataset:
+  # nnUNet dataset ID (integer 1~999). Dataset dir → Dataset{ID:03d}_{name}
+  id: 201
+  name: "UltrasoundSeg"
+
+  # Fraction of cases used for training. 1.0 = let nnUNet's 5-fold CV manage
+  # all validation splits (recommended). <1.0 holds out a separate test set.
+  train_fraction: 1.0
+
+  # Random seed for the optional train/test split
+  split_seed: 42
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Segmentation task
+# ─────────────────────────────────────────────────────────────────────────────
+segmentation:
+  # "binary" → background + single foreground class.
+  mode: "binary"
+
+  # nnUNet label block. For 2-D the masks are already foreground/background,
+  # so labels are declared directly here (NOT remapped via labels.yaml).
+  # For a multi-class task add more entries and set data.binary_mask: false.
+  labels:
+    background: 0
+    target: 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2-D image handling
+# ─────────────────────────────────────────────────────────────────────────────
+data:
+  # "grayscale" → 1 input channel (typical for ultrasound)
+  # "rgb"       → 3 input channels (typical for colour endoscopy)
+  color_mode: "grayscale"
+
+  # Binarise lossy JPEG masks: pixels > mask_threshold (0-255) become foreground.
+  binary_mask: true
+  mask_threshold: 127
+
+# ─────────────────────────────────────────────────────────────────────────────
+# nnUNet Preprocessing
+# ─────────────────────────────────────────────────────────────────────────────
+preprocessing:
+  verify_dataset_integrity: true
+  num_processes: 8
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Training
+# ─────────────────────────────────────────────────────────────────────────────
+training:
+  # MUST be "2d" for 2-D images.
+  configuration: "2d"
+
+  # Cross-validation fold to train: 0, 1, 2, 3, 4 (or use --all_folds)
+  fold: 0
+
+  trainer: "nnUNetTrainer"
+
+  num_gpus: 1
+
+  # Data augmentation workers (lower on Windows / low-RAM machines)
+  num_proc_da: 4
+
+  use_amp: true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Inference
+# ─────────────────────────────────────────────────────────────────────────────
+inference:
+  checkpoint: "checkpoint_best.pth"
+  fold: 0
+  step_size: 0.5
+  save_probabilities: false
+  disable_tta: false
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evaluation
+# ─────────────────────────────────────────────────────────────────────────────
+evaluation:
+  metrics:
+    - dice
+    - hausdorff95
+  save_csv: true
