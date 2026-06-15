@@ -14,13 +14,16 @@ BoneSeg/
 │   ├── s0000-seg.nii.gz        #   Segmentation mask (104-class Total Segmentator)
 │   └── ...
 ├── configs/
-│   ├── default.yaml            # ← Main experiment config (edit this)
+│   ├── default.yaml            # ← Main experiment config (3-D CT)
+│   ├── 2d.yaml                 # ← 2-D config (ultrasound / endoscopy)
 │   └── labels.yaml             # ← Total Segmentator label definitions
 ├── src/
 │   ├── __init__.py
-│   ├── utils.py                # Path / logging / env helpers
-│   ├── label_config.py         # Label remapping logic
+│   ├── utils.py                # Path / logging / env helpers + data_type switch
+│   ├── label_config.py         # Label remapping logic (3-D)
 │   ├── data_prep.py           # nnUNet dataset preparation (3-D)
+│   ├── data_prep_2d.py         # nnUNet dataset preparation (2-D images)
+│   ├── image_io.py             # 2-D image/mask IO (jpg/png ↔ nnUNet PNG)
 │   └── slices_builder.py       # 2.5-D slice extraction and multi-channel IO
 ├── scripts/
 │   ├── inspect_labels.py       # Utility: inspect actual label values in data
@@ -253,6 +256,73 @@ Output labels (default):
 
 For bone segmentation with CT images, **`3d_fullres` is recommended** as bones
 are three-dimensional structures. Use `3d_lowres` if you run out of GPU memory.
+
+---
+
+## 2-D Image Segmentation (ultrasound / endoscopy)
+
+The same pipeline can segment **native 2-D images** (e.g. ultrasound or
+endoscopy `.jpg`/`.png`) instead of 3-D CT volumes. This is selected purely by
+the config: setting `data_type: "2d"` switches every step
+(`01`/`02`/`03`/`04`) onto the 2-D code paths. The 3-D behaviour is unchanged
+when `data_type` is absent (it defaults to `"3d"`).
+
+### Input layout
+
+Images and masks live in two parallel directory trees with **identical
+relative paths** — the tree can be arbitrarily nested:
+
+```
+/data0/train/images/C847675/CS20250714439/1/<uid>.jpg     ← image
+/data0/train/mask/C847675/CS20250714439/1/<uid>.jpg       ← annotation mask
+```
+
+Every leaf image becomes one nnUNet training case. The case name is derived
+from its path relative to the image root (e.g.
+`C847675-CS20250714439-1-<uid>`), and a `manifest.json` is written next to the
+dataset mapping each case back to its source image/mask.
+
+### How the adaptation works
+
+- **No Total Segmentator remapping** — 2-D masks are already foreground/
+  background, so `labels` are declared directly in `configs/2d.yaml`.
+- **nnUNet native 2-D format** — images are written as `imagesTr/{case}_0000.png`
+  and labels as `labelsTr/{case}.png` with `file_ending: ".png"`. Grayscale
+  images → 1 input channel; RGB → 3 channels (`channel_names` set accordingly).
+- **Lossy-JPEG masks are binarised** — mask pixels `> mask_threshold` become
+  foreground `1`, recovering a clean `{0,1}` label map from noisy JPEGs.
+- **Training is unchanged** — `training.configuration: "2d"` makes nnUNet train
+  a 2-D U-Net; `scripts/02_train.py` needs no modality-specific logic.
+
+### 2-D Workflow
+
+```bash
+# 1. Prepare the nnUNet 2-D dataset from the nested image/mask trees
+python scripts/01_prepare_data.py --config configs/2d.yaml
+
+# 2. Train the 2-D U-Net (uses the "2d" nnUNet configuration)
+python scripts/02_train.py --config configs/2d.yaml
+
+# 3. Predict on a folder of raw 2-D images (nested or flat, jpg/png)
+python scripts/03_predict.py --config configs/2d.yaml \
+    --input_raw /data0/test/images --output predictions_2d/
+
+# 4. Evaluate predictions against ground-truth masks (raw nested tree or flat)
+python scripts/04_evaluate.py --config configs/2d.yaml \
+    --pred_dir predictions_2d/ --gt_dir /data0/test/mask
+```
+
+### 2-D Configuration (`configs/2d.yaml`)
+
+| Section | Key | Description |
+|---------|-----|-------------|
+| (top-level) | `data_type` | `"2d"` to enable the 2-D pipeline |
+| `paths` | `images_dir` / `masks_dir` | Roots of the nested image / mask trees |
+| `segmentation` | `labels` | nnUNet label block (e.g. `{background: 0, target: 1}`) |
+| `data` | `color_mode` | `"grayscale"` (1ch, ultrasound) or `"rgb"` (3ch, endoscopy) |
+| `data` | `mask_threshold` | Grayscale cut-off for binarising JPEG masks |
+| `data` | `binary_mask` | `true` to binarise; `false` to keep raw class-ID pixels |
+| `training` | `configuration` | must be `"2d"` |
 
 ---
 

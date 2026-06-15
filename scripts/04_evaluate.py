@@ -34,9 +34,11 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src import image_io
 from src.data_prep import remap_labels
+from src.data_prep_2d import get_2d_labels, make_case_name
 from src.label_config import LabelConfig
-from src.utils import ensure_dir, load_config, set_nnunet_env, setup_logging
+from src.utils import ensure_dir, get_data_type, load_config, set_nnunet_env, setup_logging
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -262,6 +264,103 @@ def save_csv(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 2-D evaluation (ultrasound / endoscopy PNG masks)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def find_prediction_files_2d(pred_dir: Path) -> Dict[str, Path]:
+    """Return {case_id: pred_path} for all PNG predictions in *pred_dir*."""
+    result: Dict[str, Path] = {}
+    for f in image_io.find_images_recursive(pred_dir):
+        result[f.stem] = f
+    return result
+
+
+def find_gt_file_2d(gt_dir: Path, case_id: str) -> Optional[Path]:
+    """
+    Locate the ground-truth mask for *case_id* in *gt_dir*.
+
+    Handles two layouts:
+      - a flat folder of nnUNet-style ``{case}.png`` labels, and
+      - a nested raw-mask tree mirroring the image tree (matched by the same
+        :func:`make_case_name` scheme used during preparation / prediction).
+    """
+    for ext in image_io.IMAGE_EXTENSIONS:
+        flat = gt_dir / f"{case_id}{ext}"
+        if flat.exists():
+            return flat
+    for cand in image_io.find_images_recursive(gt_dir):
+        if make_case_name(cand.relative_to(gt_dir)) == case_id:
+            return cand
+    return None
+
+
+def evaluate_2d(cfg: dict, args: argparse.Namespace) -> None:
+    """Evaluate 2-D PNG predictions against ground-truth masks."""
+    logger = logging.getLogger(__name__)
+
+    labels      = get_2d_labels(cfg)
+    class_names = {v: k for k, v in labels.items() if v != 0}
+    class_ids   = sorted(class_names.keys())
+
+    mask_threshold = int(cfg.get("data", {}).get("mask_threshold", 127))
+    binary_mask    = bool(cfg.get("data", {}).get("binary_mask", True))
+
+    compute_hd95 = not args.no_hd95
+    pred_dir     = Path(args.pred_dir)
+    gt_dir       = Path(args.gt_dir)
+    output_dir   = Path(args.output_dir) if args.output_dir else pred_dir
+    ensure_dir(output_dir)
+
+    pred_files = find_prediction_files_2d(pred_dir)
+    if not pred_files:
+        logger.error("No PNG predictions found in '%s'.", pred_dir)
+        sys.exit(1)
+
+    logger.info("Evaluating %d 2-D prediction(s) ...", len(pred_files))
+
+    all_results: List[Dict] = []
+    missing_gt = 0
+
+    for case_id, pred_path in sorted(pred_files.items()):
+        gt_path = find_gt_file_2d(gt_dir, case_id)
+        if gt_path is None:
+            logger.warning("No ground truth found for case '%s' — skipped.", case_id)
+            missing_gt += 1
+            continue
+
+        pred_data = image_io.load_label_png(pred_path)
+        if args.gt_already_remapped:
+            gt_data = image_io.load_label_png(gt_path)
+        else:
+            gt_data = image_io.load_mask_as_label(
+                gt_path, threshold=mask_threshold, binary=binary_mask,
+            )
+
+        if pred_data.shape != gt_data.shape:
+            logger.warning(
+                "Shape mismatch for '%s': pred=%s, gt=%s — skipped.",
+                case_id, pred_data.shape, gt_data.shape,
+            )
+            continue
+
+        # 2-D images have no physical spacing → unit spacing for HD95.
+        metrics = evaluate_case(pred_data, gt_data, class_ids, None, compute_hd95)
+        all_results.append({"case": case_id, "metrics": metrics})
+        dice_vals = [f"{class_names[c]}={metrics[c]['dice']:.3f}" for c in class_ids]
+        logger.info("  %s — %s", case_id, ", ".join(dice_vals))
+
+    if missing_gt:
+        logger.warning("%d case(s) skipped due to missing ground truth.", missing_gt)
+    if not all_results:
+        logger.error("No cases evaluated successfully.")
+        sys.exit(1)
+
+    print_summary_table(all_results, class_names, compute_hd95)
+    if cfg["evaluation"].get("save_csv", True):
+        save_csv(all_results, class_names, output_dir / "evaluation_metrics.csv", compute_hd95)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Main
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -292,6 +391,14 @@ def main() -> None:
 
     cfg       = load_config(args.config)
     set_nnunet_env(cfg)
+
+    # ── 2-D evaluation (ultrasound / endoscopy) ────────────────────────────
+    if get_data_type(cfg) == "2d":
+        logger.info("Data type: 2d")
+        evaluate_2d(cfg, args)
+        return
+
+    # ── 3-D CT evaluation (Total Segmentator remapping) ────────────────────
     label_cfg = LabelConfig(cfg["paths"]["labels_config"])
 
     seg_mode   = cfg["segmentation"]["mode"]

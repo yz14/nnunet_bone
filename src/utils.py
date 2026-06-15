@@ -131,6 +131,29 @@ def set_nnunet_env(cfg: Dict[str, Any]) -> None:
     logger.info("nnUNet_results      = %s", dirs["results"])
 
 
+def get_data_type(cfg: Dict[str, Any]) -> str:
+    """
+    Return the data modality the pipeline should run in.
+
+    Reads the optional top-level ``data_type`` key from the config and
+    normalises it to lower-case. Defaults to ``"3d"`` so that existing
+    3-D CT configs (which omit the key) keep their original behaviour.
+
+    Returns either ``"3d"`` or ``"2d"``. Any other value raises ValueError.
+    """
+    data_type = str(cfg.get("data_type", "3d")).strip().lower()
+    if data_type not in ("3d", "2d"):
+        raise ValueError(
+            f"Unsupported data_type '{data_type}' in config. Expected '3d' or '2d'."
+        )
+    return data_type
+
+
+def is_2d(cfg: Dict[str, Any]) -> bool:
+    """Convenience predicate: True when the config targets 2-D image data."""
+    return get_data_type(cfg) == "2d"
+
+
 def get_dataset_dir_name(cfg: Dict[str, Any]) -> str:
     """Return nnUNet v2 dataset directory name, e.g. 'Dataset100_BoneSegmentation'."""
     if "dataset" not in cfg:

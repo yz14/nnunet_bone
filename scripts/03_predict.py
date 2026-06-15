@@ -35,7 +35,15 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.utils import ensure_dir, get_dataset_dir_name, load_config, set_nnunet_env, setup_logging
+from src import image_io
+from src.data_prep_2d import make_case_name
+from src.utils import (
+    ensure_dir,
+    get_data_type,
+    load_config,
+    set_nnunet_env,
+    setup_logging,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -105,6 +113,34 @@ def prepare_input_folder(raw_input_dir: Path) -> Path:
     if converted == 0:
         raise FileNotFoundError(
             f"No '*.nii.gz' image files found in '{raw_input_dir}'."
+        )
+    return tmp_dir
+
+
+def prepare_input_folder_2d(raw_input_dir: Path, color_mode: str) -> Path:
+    """
+    Convert raw 2-D images (jpg / png, possibly nested) into a flat temporary
+    folder of nnUNet-format ``{case}_0000.png`` files.
+
+    Case names are derived from each image's path relative to *raw_input_dir*
+    (same scheme as data preparation) so predictions can later be matched back
+    to their source images. Returns the path to the temporary folder.
+    """
+    logger = logging.getLogger(__name__)
+    tmp_dir = Path(tempfile.mkdtemp(prefix="seg2d_predict_"))
+
+    converted = 0
+    for img_path in image_io.find_images_recursive(raw_input_dir):
+        rel = img_path.relative_to(raw_input_dir)
+        case_name = make_case_name(rel)
+        image = image_io.load_image(img_path, color_mode)
+        image_io.save_nnunet_image(image, case_name, tmp_dir)
+        converted += 1
+
+    logger.info("Prepared %d 2-D images in temporary input folder: %s", converted, tmp_dir)
+    if converted == 0:
+        raise FileNotFoundError(
+            f"No 2-D image files {image_io.IMAGE_EXTENSIONS} found in '{raw_input_dir}'."
         )
     return tmp_dir
 
@@ -194,6 +230,9 @@ def main() -> None:
     disable_tta = args.disable_tta or cfg["inference"].get("disable_tta", False)
 
     # ── Prepare input folder ──────────────────────────────────────────────
+    data_type = get_data_type(cfg)
+    color_mode = cfg.get("data", {}).get("color_mode", image_io.COLOR_MODE_GRAYSCALE)
+    logger.info("Data type: %s", data_type)
     tmp_dir: "Path | None" = None
 
     if args.input is not None:
@@ -206,7 +245,10 @@ def main() -> None:
         if not raw_dir.exists():
             logger.error("Raw input directory not found: %s", raw_dir)
             sys.exit(1)
-        tmp_dir = prepare_input_folder(raw_dir)
+        if data_type == "2d":
+            tmp_dir = prepare_input_folder_2d(raw_dir, color_mode)
+        else:
+            tmp_dir = prepare_input_folder(raw_dir)
         input_dir = tmp_dir
     else:
         logger.error("Provide --input (nnUNet format) or --input_raw (raw images).")

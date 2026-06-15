@@ -26,6 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.utils import (
+    get_data_type,
     get_dataset_dir_name,
     get_nnunet_dirs,
     load_config,
@@ -196,6 +197,13 @@ def main() -> None:
 
     cfg = load_config(args.config)
     set_nnunet_env(cfg)
+
+    # Training itself is modality-agnostic: nnUNet decides 2-D vs 3-D from
+    # `training.configuration` (e.g. "2d" for the 2-D image pipeline).
+    logger.info(
+        "Data type: %s | nnUNet configuration: %s",
+        get_data_type(cfg), cfg["training"]["configuration"],
+    )
 
     # ── Determine folds to train ───────────────────────────────────────────
     if args.all_folds:
