@@ -312,6 +312,32 @@ python scripts/04_evaluate.py --config configs/2d.yaml \
     --pred_dir predictions_2d/ --gt_dir /data0/test/mask
 ```
 
+### Mirror the input directory tree (`--mirror_tree`)
+
+By default 2-D prediction writes a **flat** folder of `{case}.png` masks
+(convenient for evaluation). Add `--mirror_tree` to instead reproduce the input
+directory layout: each prediction is written back under the **same relative
+path** as its source image, so the output tree mirrors the input tree
+one-for-one. Only image files are predicted (`.jpg`/`.png`/...); other files
+(`.dcm`/`.pdf`/`.xlsx`/...) are ignored.
+
+```bash
+python scripts/03_predict.py --config configs/2d.yaml \
+    --input_raw 甲状腺图像报告 --output 甲状腺图像报告pred --mirror_tree
+```
+
+```
+甲状腺图像报告/                         甲状腺图像报告pred/
+└── 甲状腺乳头状癌800/        →        └── 甲状腺乳头状癌800/
+    └── 2026-03-30/49664962_唐月芳/         └── 2026-03-30/49664962_唐月芳/
+        └── CS.../<uid>.jpg                     └── CS.../<uid>.png   ← predicted mask
+```
+
+`--mirror_tree` requires `data_type: "2d"` and `--input_raw`. It can also be
+enabled by default via `inference.mirror_tree: true` in `configs/2d.yaml`.
+The flat-output behaviour (without the flag) is unchanged, and the 3-D CT path
+is unaffected.
+
 ### 2-D Configuration (`configs/2d.yaml`)
 
 | Section | Key | Description |

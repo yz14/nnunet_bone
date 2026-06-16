@@ -7,6 +7,8 @@
 #   python scripts/01_prepare_data.py --config configs/2d.yaml
 #   CUDA_VISIBLE_DEVICES=0 python scripts/02_train.py --config configs/2d.yaml
 #   python scripts/03_predict.py  --config configs/2d.yaml --input_raw <dir> --output <dir>
+#   # mirror the input directory tree (output structure == input structure):
+#   python scripts/03_predict.py  --config configs/2d.yaml --input_raw <dir> --output <dir>pred --mirror_tree
 #   python scripts/04_evaluate.py --config configs/2d.yaml --pred_dir <dir> --gt_dir <dir>
 
 # Selects the 2-D pipeline (data_prep_2d, PNG IO, 2d nnUNet configuration).
@@ -102,6 +104,12 @@ inference:
   step_size: 0.5
   save_probabilities: false
   disable_tta: false
+
+  # When true (or --mirror_tree on the CLI), each prediction is written back
+  # under the same relative path as its source image, so the output directory
+  # mirrors the raw input tree (e.g. "甲状腺图像报告" → "甲状腺图像报告pred").
+  # Only valid with --input_raw. Default false → flat {case}.png output.
+  mirror_tree: false
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Evaluation

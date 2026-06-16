@@ -36,7 +36,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src import image_io
-from src.data_prep_2d import make_case_name
+from src.tree_io_2d import prepare_input_tree_2d, scatter_predictions_to_tree
 from src.utils import (
     ensure_dir,
     get_data_type,
@@ -66,6 +66,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output", type=str, required=True,
         help="Output folder for predicted segmentation masks",
+    )
+    parser.add_argument(
+        "--mirror_tree", action="store_true",
+        help=(
+            "2-D + --input_raw only: write each prediction back under the same "
+            "relative path as its source image, mirroring the input directory "
+            "tree (e.g. '<dir>' -> '<dir>pred'). Without this flag, predictions "
+            "are written to a flat folder."
+        ),
     )
     parser.add_argument(
         "--fold", default=None,
@@ -125,23 +134,12 @@ def prepare_input_folder_2d(raw_input_dir: Path, color_mode: str) -> Path:
     Case names are derived from each image's path relative to *raw_input_dir*
     (same scheme as data preparation) so predictions can later be matched back
     to their source images. Returns the path to the temporary folder.
+
+    This reuses :func:`src.tree_io_2d.prepare_input_tree_2d` and discards the
+    case→relative-path mapping, since the flat path does not preserve the input
+    directory layout.
     """
-    logger = logging.getLogger(__name__)
-    tmp_dir = Path(tempfile.mkdtemp(prefix="seg2d_predict_"))
-
-    converted = 0
-    for img_path in image_io.find_images_recursive(raw_input_dir):
-        rel = img_path.relative_to(raw_input_dir)
-        case_name = make_case_name(rel)
-        image = image_io.load_image(img_path, color_mode)
-        image_io.save_nnunet_image(image, case_name, tmp_dir)
-        converted += 1
-
-    logger.info("Prepared %d 2-D images in temporary input folder: %s", converted, tmp_dir)
-    if converted == 0:
-        raise FileNotFoundError(
-            f"No 2-D image files {image_io.IMAGE_EXTENSIONS} found in '{raw_input_dir}'."
-        )
+    tmp_dir, _ = prepare_input_tree_2d(raw_input_dir, color_mode)
     return tmp_dir
 
 
@@ -232,8 +230,22 @@ def main() -> None:
     # ── Prepare input folder ──────────────────────────────────────────────
     data_type = get_data_type(cfg)
     color_mode = cfg.get("data", {}).get("color_mode", image_io.COLOR_MODE_GRAYSCALE)
+    mirror_tree = args.mirror_tree or cfg["inference"].get("mirror_tree", False)
     logger.info("Data type: %s", data_type)
-    tmp_dir: "Path | None" = None
+
+    # The mirror-tree output mode reconstructs the input directory layout, which
+    # only makes sense for raw 2-D image trees discovered via --input_raw.
+    if mirror_tree and (data_type != "2d" or args.input_raw is None):
+        logger.error(
+            "--mirror_tree requires data_type '2d' and --input_raw "
+            "(raw nested image tree). Got data_type='%s', input_raw=%s.",
+            data_type, args.input_raw,
+        )
+        sys.exit(1)
+
+    tmp_dir: "Path | None" = None      # temporary nnUNet input folder
+    tmp_out_dir: "Path | None" = None  # temporary flat prediction folder (mirror mode)
+    case_to_rel: dict = {}
 
     if args.input is not None:
         input_dir = Path(args.input)
@@ -246,7 +258,10 @@ def main() -> None:
             logger.error("Raw input directory not found: %s", raw_dir)
             sys.exit(1)
         if data_type == "2d":
-            tmp_dir = prepare_input_folder_2d(raw_dir, color_mode)
+            if mirror_tree:
+                tmp_dir, case_to_rel = prepare_input_tree_2d(raw_dir, color_mode)
+            else:
+                tmp_dir = prepare_input_folder_2d(raw_dir, color_mode)
         else:
             tmp_dir = prepare_input_folder(raw_dir)
         input_dir = tmp_dir
@@ -254,26 +269,42 @@ def main() -> None:
         logger.error("Provide --input (nnUNet format) or --input_raw (raw images).")
         sys.exit(1)
 
-    output_dir = Path(args.output)
+    final_output_dir = Path(args.output)
+    # In mirror mode, nnUNet predicts into a flat temporary folder; predictions
+    # are then scattered into the mirrored tree at *final_output_dir*.
+    if mirror_tree:
+        tmp_out_dir = Path(tempfile.mkdtemp(prefix="seg2d_predict_out_"))
+        predict_output_dir = tmp_out_dir
+    else:
+        predict_output_dir = final_output_dir
 
     try:
         run_predict(
             cfg=cfg,
             input_dir=input_dir,
-            output_dir=output_dir,
+            output_dir=predict_output_dir,
             fold=fold,
             checkpoint=checkpoint,
             save_probabilities=save_probs,
             disable_tta=disable_tta,
         )
+        if mirror_tree:
+            scatter_predictions_to_tree(
+                predict_output_dir, case_to_rel, final_output_dir,
+            )
     finally:
         if tmp_dir is not None and tmp_dir.exists():
             shutil.rmtree(str(tmp_dir), ignore_errors=True)
+        if tmp_out_dir is not None and tmp_out_dir.exists():
+            shutil.rmtree(str(tmp_out_dir), ignore_errors=True)
 
-    logger.info("Done. To evaluate predictions, run:")
-    logger.info("  python scripts/04_evaluate.py --config %s "
-                "--pred_dir %s --gt_dir <ground_truth_dir>",
-                args.config, output_dir)
+    if mirror_tree:
+        logger.info("Done. Predictions mirror the input tree at: %s", final_output_dir)
+    else:
+        logger.info("Done. To evaluate predictions, run:")
+        logger.info("  python scripts/04_evaluate.py --config %s "
+                    "--pred_dir %s --gt_dir <ground_truth_dir>",
+                    args.config, final_output_dir)
 
 
 if __name__ == "__main__":
